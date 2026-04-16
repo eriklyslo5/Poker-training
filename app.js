@@ -1,68 +1,62 @@
 // =============================================
 //  Poker Opening Range Trainer — App Logic
+//  Includes: Live Table simulation, RFI quiz,
+//  Explore modes, dynamic action buttons
 // =============================================
 
 (function () {
   "use strict";
 
   // ---- DOM refs ----
-  const modeSelect     = document.getElementById("mode-select");
-  const positionSelect = document.getElementById("position-select");
-  const positionGroup  = document.getElementById("position-group");
-  const openerSelect   = document.getElementById("opener-select");
-  const openerGroup    = document.getElementById("opener-group");
-  const dealBtn        = document.getElementById("deal-btn");
-
-  // RFI quiz
-  const quizArea       = document.getElementById("quiz-area");
-  const card1          = document.getElementById("card-1");
-  const card2          = document.getElementById("card-2");
-  const raiseBtn       = document.getElementById("raise-btn");
-  const foldBtn        = document.getElementById("fold-btn");
-  const feedback       = document.getElementById("feedback");
-  const feedbackIcon   = document.getElementById("feedback-icon");
-  const feedbackText   = document.getElementById("feedback-text");
-
-  // Scenario quiz
-  const scenarioArea       = document.getElementById("scenario-area");
-  const scenarioDesc       = document.getElementById("scenario-description");
-  const cardS1             = document.getElementById("card-s1");
-  const cardS2             = document.getElementById("card-s2");
-  const threeBetBtn        = document.getElementById("threeBet-btn");
-  const callBtn            = document.getElementById("call-btn");
-  const foldSBtn           = document.getElementById("fold-s-btn");
-  const scenarioFeedback     = document.getElementById("scenario-feedback");
-  const scenarioFeedbackIcon = document.getElementById("scenario-feedback-icon");
-  const scenarioFeedbackText = document.getElementById("scenario-feedback-text");
-
-  // Explore
-  const exploreArea    = document.getElementById("explore-area");
-  const rangeGrid      = document.getElementById("range-grid");
-  const exploreVsArea  = document.getElementById("explore-vs-area");
-  const rangeGridVs    = document.getElementById("range-grid-vs");
-
-  // Table
-  const tableArea      = document.getElementById("table-area");
-  const pokerTable     = document.getElementById("poker-table");
-
-  // Score
-  const correctCount   = document.getElementById("correct-count");
-  const wrongCount     = document.getElementById("wrong-count");
-  const accuracy       = document.getElementById("accuracy");
-  const resetBtn       = document.getElementById("reset-btn");
+  var modeSelect      = document.getElementById("mode-select");
+  var positionSelect  = document.getElementById("position-select");
+  var positionGroup   = document.getElementById("position-group");
+  var openerSelect    = document.getElementById("opener-select");
+  var openerGroup     = document.getElementById("opener-group");
+  var dealBtn         = document.getElementById("deal-btn");
+  var tableArea       = document.getElementById("table-area");
+  var pokerTable      = document.getElementById("poker-table");
+  var situationPrompt = document.getElementById("situation-prompt");
+  var handArea        = document.getElementById("hand-area");
+  var card1           = document.getElementById("card-1");
+  var card2           = document.getElementById("card-2");
+  var actionArea      = document.getElementById("action-area");
+  var actionButtons   = document.getElementById("action-buttons");
+  var feedbackEl      = document.getElementById("feedback");
+  var feedbackIcon    = document.getElementById("feedback-icon");
+  var feedbackText    = document.getElementById("feedback-text");
+  var exploreArea     = document.getElementById("explore-area");
+  var rangeGrid       = document.getElementById("range-grid");
+  var exploreVsArea   = document.getElementById("explore-vs-area");
+  var rangeGridVs     = document.getElementById("range-grid-vs");
+  var correctCount    = document.getElementById("correct-count");
+  var wrongCount      = document.getElementById("wrong-count");
+  var accuracyEl      = document.getElementById("accuracy");
+  var resetBtn        = document.getElementById("reset-btn");
 
   // ---- State ----
-  let score       = { correct: 0, wrong: 0 };
-  let currentHand = null;
-  let currentScenario = null;  // { heroPos, openerPos, handLabel, correctAction }
-  let waiting     = false;
+  var score   = { correct: 0, wrong: 0 };
+  var waiting = false;       // blocks input during animation/feedback
+  var simTimers = [];        // active setTimeout IDs for simulation animation
 
-  // ---- Card helpers ----
-  const SUIT_SYMBOLS = { s: "\u2660", h: "\u2665", d: "\u2666", c: "\u2663" };
-  const SUIT_COLORS  = { s: "black", h: "red", d: "red", c: "black" };
-  const ALL_SUITS    = ["s","h","d","c"];
+  // Current hand state (used by all quiz modes)
+  var currentState = null;
+  // {
+  //   heroPos, handLabel, row, col,
+  //   potState: "unopened"|"raised"|"3bet",
+  //   raiserPos, threeBettorPos,
+  //   correctAction: "raise"|"fold"|"3bet"|"call"|"4bet"
+  // }
 
-  function randomSuit()  { return ALL_SUITS[Math.floor(Math.random() * 4)]; }
+
+  // ==================================================
+  //  Card rendering
+  // ==================================================
+  var SUIT_SYMBOLS = { s: "\u2660", h: "\u2665", d: "\u2666", c: "\u2663" };
+  var SUIT_COLORS  = { s: "black", h: "red", d: "red", c: "black" };
+  var ALL_SUITS    = ["s","h","d","c"];
+
+  function randomSuit() { return ALL_SUITS[Math.floor(Math.random() * 4)]; }
 
   function renderCard(el, rank, suit) {
     el.textContent = rank + SUIT_SYMBOLS[suit];
@@ -70,41 +64,42 @@
   }
 
   function renderRandomCards(el1, el2, row, col) {
-    const rank1 = RANKS[row];
-    const rank2 = RANKS[col];
-
+    var rank1 = RANKS[row], rank2 = RANKS[col];
     if (row === col) {
-      const suits = shuffleArray([...ALL_SUITS]);
+      var suits = shuffleArray([].concat(ALL_SUITS));
       renderCard(el1, rank1, suits[0]);
       renderCard(el2, rank2, suits[1]);
     } else if (col > row) {
-      const suit = randomSuit();
-      renderCard(el1, rank1, suit);
-      renderCard(el2, rank2, suit);
+      var s = randomSuit();
+      renderCard(el1, rank1, s);
+      renderCard(el2, rank2, s);
     } else {
-      const suit1 = randomSuit();
-      let suit2 = randomSuit();
-      while (suit2 === suit1) suit2 = randomSuit();
-      renderCard(el1, rank2, suit1);
-      renderCard(el2, rank1, suit2);
+      var s1 = randomSuit(), s2 = randomSuit();
+      while (s2 === s1) s2 = randomSuit();
+      renderCard(el1, rank2, s1);
+      renderCard(el2, rank1, s2);
     }
   }
 
-  // ---- Populate positions ----
-  getPositions().forEach(pos => {
-    const opt = document.createElement("option");
+
+  // ==================================================
+  //  Populate position dropdown
+  // ==================================================
+  TABLE_POSITIONS.forEach(function(pos) {
+    var opt = document.createElement("option");
     opt.value = pos;
     opt.textContent = pos;
     positionSelect.appendChild(opt);
   });
 
-  // ---- Build poker table seats ----
-  function buildTable() {
-    // Remove existing seats
-    pokerTable.querySelectorAll(".seat, .action-chip").forEach(el => el.remove());
 
-    TABLE_POSITIONS.forEach(pos => {
-      const seat = document.createElement("div");
+  // ==================================================
+  //  Table seat management
+  // ==================================================
+  function buildTable() {
+    pokerTable.querySelectorAll(".seat").forEach(function(el) { el.remove(); });
+    TABLE_POSITIONS.forEach(function(pos) {
+      var seat = document.createElement("div");
       seat.className = "seat";
       seat.dataset.pos = pos;
       seat.innerHTML = '<span class="seat-label">' + pos + '</span><span class="seat-action"></span>';
@@ -112,181 +107,379 @@
     });
   }
 
-  function resetTableSeats() {
-    pokerTable.querySelectorAll(".seat").forEach(seat => {
-      seat.classList.remove("hero","opener","folded");
+  function resetAllSeats() {
+    pokerTable.querySelectorAll(".seat").forEach(function(seat) {
+      seat.className = "seat";
+      seat.dataset.pos = seat.dataset.pos; // keep data-pos
       seat.querySelector(".seat-action").textContent = "";
     });
-    pokerTable.querySelectorAll(".action-chip").forEach(el => el.remove());
   }
 
-  function setSeatState(pos, state, actionText) {
-    const seat = pokerTable.querySelector('.seat[data-pos="' + pos + '"]');
+  function getSeat(pos) {
+    return pokerTable.querySelector('.seat[data-pos="' + pos + '"]');
+  }
+
+  function setSeatState(pos, cssClass, actionText) {
+    var seat = getSeat(pos);
     if (!seat) return;
-    seat.classList.add(state);
-    if (actionText) {
-      seat.querySelector(".seat-action").textContent = actionText;
-    }
+    // Animate
+    seat.classList.add("acting");
+    setTimeout(function() { seat.classList.remove("acting"); }, 400);
+    // Apply state
+    seat.classList.add(cssClass);
+    if (actionText) seat.querySelector(".seat-action").textContent = actionText;
   }
 
-  // Show the table scenario: opener raises, everyone between folds, hero is highlighted
-  function showTableScenario(heroPos, openerPos) {
-    resetTableSeats();
-    const posIndex = p => TABLE_POSITIONS.indexOf(p);
-    const opIdx = posIndex(openerPos);
-    const heroIdx = posIndex(heroPos);
-
-    TABLE_POSITIONS.forEach((pos, i) => {
-      if (pos === openerPos) {
-        setSeatState(pos, "opener", "RAISE");
-      } else if (pos === heroPos) {
-        setSeatState(pos, "hero", "YOU");
-      } else {
-        // Positions between opener and hero fold
-        // In clockwise order: opener acts, then positions after fold until hero
-        const isBetween = opIdx < heroIdx
-          ? (i > opIdx && i < heroIdx)
-          : (i > opIdx || i < heroIdx);
-        if (isBetween) {
-          setSeatState(pos, "folded", "fold");
-        }
-      }
-    });
+  function clearSimTimers() {
+    simTimers.forEach(function(t) { clearTimeout(t); });
+    simTimers = [];
   }
 
-  // Show table for RFI: hero highlighted, everyone before folded
-  function showTableRFI(heroPos) {
-    resetTableSeats();
-    const heroIdx = TABLE_POSITIONS.indexOf(heroPos);
 
-    TABLE_POSITIONS.forEach((pos, i) => {
-      if (pos === heroPos) {
-        setSeatState(pos, "hero", "YOU");
-      } else if (i < heroIdx) {
-        setSeatState(pos, "folded", "fold");
-      }
-    });
-  }
-
-  // ---- Populate openers based on selected hero position ----
+  // ==================================================
+  //  Populate openers (for explore-vs mode)
+  // ==================================================
   function populateOpeners() {
     openerSelect.innerHTML = "";
-    const heroPos = positionSelect.value;
-    const heroIdx = TABLE_POSITIONS.indexOf(heroPos);
+    var heroPos = resolvePosition();
+    var heroIdx = TABLE_POSITIONS.indexOf(heroPos);
 
-    // Openers are positions that act before hero
-    TABLE_POSITIONS.forEach((pos, i) => {
-      if (i < heroIdx && FACING_RAISE[heroPos]?.[pos]) {
-        const opt = document.createElement("option");
+    TABLE_POSITIONS.forEach(function(pos, i) {
+      if (i < heroIdx && FACING_RAISE[heroPos] && FACING_RAISE[heroPos][pos]) {
+        var opt = document.createElement("option");
         opt.value = pos;
         opt.textContent = pos;
         openerSelect.appendChild(opt);
       }
     });
 
-    // If no openers available, show message
     if (openerSelect.options.length === 0) {
-      const opt = document.createElement("option");
+      var opt = document.createElement("option");
       opt.value = "";
-      opt.textContent = "No openers (UTG acts first)";
+      opt.textContent = "No openers";
       openerSelect.appendChild(opt);
     }
   }
 
-  // ---- Mode switching ----
-  function updateMode() {
-    const mode = modeSelect.value;
 
-    // Hide all sections
-    quizArea.classList.add("hidden");
-    scenarioArea.classList.add("hidden");
-    exploreArea.classList.add("hidden");
-    exploreVsArea.classList.add("hidden");
-    hideFeedback();
-    hideScenarioFeedback();
-
-    // Show/hide controls
-    const showDeal = (mode === "quiz" || mode === "scenario");
-    dealBtn.classList.toggle("hidden", !showDeal);
-
-    // Position selector: always show
-    positionGroup.classList.remove("hidden");
-
-    // Opener selector: only for vs-raise modes
-    const showOpener = (mode === "scenario" || mode === "explore-vs");
-    openerGroup.classList.toggle("hidden", !showOpener);
-
-    if (showOpener) {
-      populateOpeners();
+  // ==================================================
+  //  Resolve position (handles "random")
+  // ==================================================
+  function resolvePosition() {
+    var val = positionSelect.value;
+    if (val === "random") {
+      return TABLE_POSITIONS[Math.floor(Math.random() * TABLE_POSITIONS.length)];
     }
-
-    switch (mode) {
-      case "quiz":
-        quizArea.classList.remove("hidden");
-        tableArea.classList.remove("hidden");
-        showTableRFI(positionSelect.value);
-        break;
-      case "scenario":
-        scenarioArea.classList.remove("hidden");
-        tableArea.classList.remove("hidden");
-        break;
-      case "explore":
-        exploreArea.classList.remove("hidden");
-        tableArea.classList.remove("hidden");
-        showTableRFI(positionSelect.value);
-        buildGrid();
-        break;
-      case "explore-vs":
-        exploreVsArea.classList.remove("hidden");
-        tableArea.classList.remove("hidden");
-        if (openerSelect.value) {
-          showTableScenario(positionSelect.value, openerSelect.value);
-          buildVsGrid();
-        }
-        break;
-    }
+    return val;
   }
 
-  modeSelect.addEventListener("change", updateMode);
 
-  positionSelect.addEventListener("change", () => {
-    const mode = modeSelect.value;
-    if (mode === "explore") {
-      showTableRFI(positionSelect.value);
-      buildGrid();
-    } else if (mode === "quiz") {
-      showTableRFI(positionSelect.value);
+  // ==================================================
+  //  Dynamic action buttons
+  // ==================================================
+  // actions: array of { id, label, cssClass, action }
+  function showActionButtons(actions) {
+    actionButtons.innerHTML = "";
+    actions.forEach(function(a) {
+      var btn = document.createElement("button");
+      btn.className = "btn " + a.cssClass;
+      btn.textContent = a.label;
+      btn.id = a.id;
+      btn.addEventListener("click", function() { handleAnswer(a.action); });
+      actionButtons.appendChild(btn);
+    });
+    actionArea.classList.remove("hidden");
+  }
+
+  function disableActionButtons() {
+    actionButtons.querySelectorAll(".btn").forEach(function(b) { b.disabled = true; });
+  }
+
+  // Button configs per pot state
+  function getButtonsForState(potState) {
+    if (potState === "unopened") {
+      return [
+        { id: "raise-btn", label: "Raise", cssClass: "btn-raise", action: "raise" },
+        { id: "fold-btn",  label: "Fold",  cssClass: "btn-fold",  action: "fold" }
+      ];
     }
-    if (mode === "scenario" || mode === "explore-vs") {
-      populateOpeners();
-      if (mode === "explore-vs" && openerSelect.value) {
-        showTableScenario(positionSelect.value, openerSelect.value);
-        buildVsGrid();
+    if (potState === "raised") {
+      return [
+        { id: "3bet-btn", label: "3-Bet", cssClass: "btn-3bet", action: "3bet" },
+        { id: "call-btn", label: "Call",   cssClass: "btn-call", action: "call" },
+        { id: "fold-btn", label: "Fold",   cssClass: "btn-fold", action: "fold" }
+      ];
+    }
+    if (potState === "3bet") {
+      return [
+        { id: "4bet-btn", label: "4-Bet", cssClass: "btn-4bet", action: "4bet" },
+        { id: "call-btn", label: "Call",   cssClass: "btn-call", action: "call" },
+        { id: "fold-btn", label: "Fold",   cssClass: "btn-fold", action: "fold" }
+      ];
+    }
+    return [];
+  }
+
+
+  // ==================================================
+  //  Determine hero's correct action
+  // ==================================================
+  function computeCorrectAction(heroPos, handLabel, potState, raiserPos, threeBettorPos) {
+    if (potState === "unopened") {
+      return getRangeSet(heroPos).has(handLabel) ? "raise" : "fold";
+    }
+    if (potState === "raised" && raiserPos) {
+      return getCorrectActionVsRaise(heroPos, raiserPos, handLabel);
+    }
+    if (potState === "3bet") {
+      // Hero is cold-facing a 3-bet (they haven't acted yet)
+      return getCorrectActionColdVs3Bet(heroPos, handLabel);
+    }
+    return "fold";
+  }
+
+
+  // ==================================================
+  //  LIVE TABLE — Full simulation
+  // ==================================================
+  function dealLiveTable() {
+    if (waiting) return;
+    clearSimTimers();
+    hideFeedback();
+    resetAllSeats();
+    handArea.classList.add("hidden");
+    actionArea.classList.add("hidden");
+    situationPrompt.classList.add("hidden");
+    situationPrompt.textContent = "";
+
+    var heroPos = resolvePosition();
+    var heroIdx = TABLE_POSITIONS.indexOf(heroPos);
+
+    // Mark hero seat
+    setSeatState(heroPos, "hero", "YOU");
+
+    // Deal hands to all players
+    var playerHands = {};
+    TABLE_POSITIONS.forEach(function(pos) {
+      playerHands[pos] = randomHandLabel();
+    });
+
+    // Simulation state
+    var potState = "unopened";
+    var raiserPos = null;
+    var threeBettorPos = null;
+
+    // Build the action sequence for players BEFORE hero
+    var actionsBeforeHero = [];
+    for (var i = 0; i < TABLE_POSITIONS.length; i++) {
+      var pos = TABLE_POSITIONS[i];
+      if (pos === heroPos) break; // stop when we reach hero
+      actionsBeforeHero.push(pos);
+    }
+
+    // Animate each player's action with delays
+    var DELAY = 600;
+    var step = 0;
+
+    function processNextPlayer() {
+      if (step >= actionsBeforeHero.length) {
+        // All players before hero have acted — it's hero's turn
+        presentHeroDecision(heroPos, playerHands[heroPos], potState, raiserPos, threeBettorPos);
+        return;
       }
-    }
-  });
 
-  openerSelect.addEventListener("change", () => {
-    const mode = modeSelect.value;
-    if (mode === "explore-vs" && openerSelect.value) {
-      showTableScenario(positionSelect.value, openerSelect.value);
-      buildVsGrid();
+      var pos = actionsBeforeHero[step];
+      var hand = playerHands[pos].label;
+      var action = getAIAction(pos, hand, potState, raiserPos);
+
+      // Apply action
+      if (action === "fold") {
+        setSeatState(pos, "folded", "fold");
+      } else if (action === "raise") {
+        setSeatState(pos, "opener", "RAISE");
+        raiserPos = pos;
+        potState = "raised";
+      } else if (action === "3bet") {
+        setSeatState(pos, "three-bettor", "3-BET");
+        threeBettorPos = pos;
+        potState = "3bet";
+      } else if (action === "call") {
+        setSeatState(pos, "caller", "CALL");
+      } else if (action === "4bet") {
+        // Treat 4-bet as a very aggressive action — rare in simulation
+        setSeatState(pos, "three-bettor", "4-BET");
+        potState = "3bet"; // keep at 3bet level for simplicity
+      }
+
+      step++;
+      var timer = setTimeout(processNextPlayer, DELAY);
+      simTimers.push(timer);
+    }
+
+    // Start the animation
+    var startTimer = setTimeout(processNextPlayer, DELAY);
+    simTimers.push(startTimer);
+  }
+
+  function presentHeroDecision(heroPos, handData, potState, raiserPos, threeBettorPos) {
+    var handLabel = handData.label;
+    var correctAction = computeCorrectAction(heroPos, handLabel, potState, raiserPos, threeBettorPos);
+
+    currentState = {
+      heroPos: heroPos,
+      handLabel: handLabel,
+      row: handData.row,
+      col: handData.col,
+      potState: potState,
+      raiserPos: raiserPos,
+      threeBettorPos: threeBettorPos,
+      correctAction: correctAction
+    };
+
+    // Build situation description
+    var desc = "";
+    if (potState === "unopened") {
+      desc = "Folded to you in " + heroPos + ". What do you do?";
+    } else if (potState === "raised") {
+      desc = raiserPos + " raises. You are in " + heroPos + ". What do you do?";
+    } else if (potState === "3bet") {
+      desc = raiserPos + " raises, " + threeBettorPos + " 3-bets. You are in " + heroPos + ".";
+    }
+
+    situationPrompt.textContent = desc;
+    situationPrompt.classList.remove("hidden");
+
+    // Show hero's cards
+    renderRandomCards(card1, card2, handData.row, handData.col);
+    handArea.classList.remove("hidden");
+
+    // Show appropriate buttons
+    showActionButtons(getButtonsForState(potState));
+  }
+
+
+  // ==================================================
+  //  RFI QUIZ — simple raise/fold
+  // ==================================================
+  function dealRFI() {
+    if (waiting) return;
+    clearSimTimers();
+    hideFeedback();
+    resetAllSeats();
+
+    var heroPos = resolvePosition();
+    var heroIdx = TABLE_POSITIONS.indexOf(heroPos);
+
+    // Show table: everyone before hero folds, hero highlighted
+    for (var i = 0; i < heroIdx; i++) {
+      setSeatState(TABLE_POSITIONS[i], "folded", "fold");
+    }
+    setSeatState(heroPos, "hero", "YOU");
+
+    var hand = randomHandLabel();
+    var correctAction = getRangeSet(heroPos).has(hand.label) ? "raise" : "fold";
+
+    currentState = {
+      heroPos: heroPos,
+      handLabel: hand.label,
+      row: hand.row,
+      col: hand.col,
+      potState: "unopened",
+      raiserPos: null,
+      threeBettorPos: null,
+      correctAction: correctAction
+    };
+
+    situationPrompt.textContent = "You are in " + heroPos + ". Folded to you.";
+    situationPrompt.classList.remove("hidden");
+
+    renderRandomCards(card1, card2, hand.row, hand.col);
+    handArea.classList.remove("hidden");
+    showActionButtons(getButtonsForState("unopened"));
+  }
+
+
+  // ==================================================
+  //  Handle answer (shared by all quiz modes)
+  // ==================================================
+  function handleAnswer(action) {
+    if (!currentState || waiting) return;
+
+    var correct = (action === currentState.correctAction);
+    var ACTION_LABELS = {
+      "raise": "Raise", "fold": "Fold",
+      "3bet": "3-Bet", "call": "Call",
+      "4bet": "4-Bet"
+    };
+    var correctLabel = ACTION_LABELS[currentState.correctAction] || currentState.correctAction;
+
+    if (correct) {
+      score.correct++;
+      showFeedback(true, "Correct!");
+    } else {
+      var detail = currentState.handLabel;
+      if (currentState.potState === "unopened") {
+        detail += " from " + currentState.heroPos + " \u2192 " + correctLabel;
+      } else if (currentState.potState === "raised") {
+        detail += " in " + currentState.heroPos + " vs " + currentState.raiserPos + " open \u2192 " + correctLabel;
+      } else if (currentState.potState === "3bet") {
+        detail += " in " + currentState.heroPos + " vs 3-bet \u2192 " + correctLabel;
+      }
+      showFeedback(false, "Wrong \u2014 " + detail);
+    }
+
+    updateScore();
+    disableActionButtons();
+
+    waiting = true;
+    var timer = setTimeout(function() {
+      waiting = false;
+      dealCurrentMode();
+    }, 1600);
+    simTimers.push(timer);
+  }
+
+
+  // ==================================================
+  //  Keyboard shortcuts
+  // ==================================================
+  document.addEventListener("keydown", function(e) {
+    var mode = modeSelect.value;
+    if (mode !== "live" && mode !== "quiz") return;
+    var key = e.key.toLowerCase();
+
+    if (key === "r" || key === "3") {
+      // Raise (RFI) or 3-bet (facing raise) — context-dependent
+      if (currentState) {
+        if (currentState.potState === "unopened") handleAnswer("raise");
+        else if (currentState.potState === "raised") handleAnswer("3bet");
+        else if (currentState.potState === "3bet") handleAnswer("4bet");
+      }
+    } else if (key === "4") {
+      handleAnswer("4bet");
+    } else if (key === "c") {
+      handleAnswer("call");
+    } else if (key === "f") {
+      handleAnswer("fold");
+    } else if (key === "d") {
+      dealCurrentMode();
     }
   });
 
 
   // ==================================================
-  //  EXPLORE: RFI 13×13 grid
+  //  Explore modes
   // ==================================================
   function buildGrid() {
     rangeGrid.innerHTML = "";
-    const rangeSet = getRangeSet(positionSelect.value);
+    var pos = resolvePosition();
+    var rangeSet = getRangeSet(pos);
 
-    for (let r = 0; r < 13; r++) {
-      for (let c = 0; c < 13; c++) {
-        const label = getHandLabel(r, c);
-        const cell  = document.createElement("div");
-        const inRange = rangeSet.has(label);
+    for (var r = 0; r < 13; r++) {
+      for (var c = 0; c < 13; c++) {
+        var label = getHandLabel(r, c);
+        var cell = document.createElement("div");
+        var inRange = rangeSet.has(label);
         cell.className = "grid-cell " + (inRange ? "raise" : "fold");
         cell.textContent = label;
         cell.title = label + (inRange ? " \u2014 Raise" : " \u2014 Fold");
@@ -295,26 +488,22 @@
     }
   }
 
-  // ==================================================
-  //  EXPLORE VS: Facing raise 13×13 grid
-  // ==================================================
   function buildVsGrid() {
     rangeGridVs.innerHTML = "";
-    const heroPos   = positionSelect.value;
-    const openerPos = openerSelect.value;
+    var heroPos = resolvePosition();
+    var openerPos = openerSelect.value;
     if (!openerPos) return;
 
-    const data = getFacingRaiseData(heroPos, openerPos);
+    var data = getFacingRaiseData(heroPos, openerPos);
 
-    for (let r = 0; r < 13; r++) {
-      for (let c = 0; c < 13; c++) {
-        const label = getHandLabel(r, c);
-        const cell  = document.createElement("div");
-        let cls = "fold";
-        let tip = "Fold";
+    for (var r = 0; r < 13; r++) {
+      for (var c = 0; c < 13; c++) {
+        var label = getHandLabel(r, c);
+        var cell = document.createElement("div");
+        var cls = "fold", tip = "Fold";
         if (data) {
-          if (data.threeBet.has(label))    { cls = "threeBet"; tip = "3-Bet"; }
-          else if (data.call.has(label))   { cls = "call-cell"; tip = "Call"; }
+          if (data.threeBet.has(label))  { cls = "threeBet"; tip = "3-Bet"; }
+          else if (data.call.has(label)) { cls = "call-cell"; tip = "Call"; }
         }
         cell.className = "grid-cell " + cls;
         cell.textContent = label;
@@ -326,194 +515,158 @@
 
 
   // ==================================================
-  //  QUIZ: RFI deal
+  //  Mode switching
   // ==================================================
-  function dealHandRFI() {
-    if (waiting) return;
+  function updateMode() {
+    var mode = modeSelect.value;
+    clearSimTimers();
+    waiting = false;
 
-    const position = positionSelect.value;
-    const rangeSet = getRangeSet(position);
-
-    const r = Math.floor(Math.random() * 13);
-    const c = Math.floor(Math.random() * 13);
-    const label = getHandLabel(r, c);
-    const isRaise = rangeSet.has(label);
-
-    currentHand = { label, isRaise };
-
-    renderRandomCards(card1, card2, r, c);
-    showTableRFI(position);
+    // Hide everything
+    handArea.classList.add("hidden");
+    actionArea.classList.add("hidden");
+    situationPrompt.classList.add("hidden");
+    exploreArea.classList.add("hidden");
+    exploreVsArea.classList.add("hidden");
     hideFeedback();
-    raiseBtn.disabled = false;
-    foldBtn.disabled  = false;
-  }
+    resetAllSeats();
 
-  function answerRFI(action) {
-    if (!currentHand || waiting) return;
+    // Show/hide controls
+    positionGroup.classList.remove("hidden");
+    openerGroup.classList.add("hidden");
+    dealBtn.classList.remove("hidden");
 
-    const correct = (action === "raise") === currentHand.isRaise;
-    const correctAction = currentHand.isRaise ? "Raise" : "Fold";
-
-    if (correct) {
-      score.correct++;
-      showFeedback(true, "Correct!");
-    } else {
-      score.wrong++;
-      showFeedback(false, "Wrong \u2014 " + currentHand.label + " is a " + correctAction + " from " + positionSelect.value);
+    switch (mode) {
+      case "live":
+        tableArea.classList.remove("hidden");
+        break;
+      case "quiz":
+        tableArea.classList.remove("hidden");
+        break;
+      case "explore":
+        tableArea.classList.remove("hidden");
+        dealBtn.classList.add("hidden");
+        buildGrid();
+        showTableRFI(resolvePosition());
+        break;
+      case "explore-vs":
+        tableArea.classList.remove("hidden");
+        dealBtn.classList.add("hidden");
+        openerGroup.classList.remove("hidden");
+        populateOpeners();
+        if (openerSelect.value) {
+          showTableScenario(resolvePosition(), openerSelect.value);
+          buildVsGrid();
+        }
+        break;
     }
-
-    updateScore();
-    raiseBtn.disabled = true;
-    foldBtn.disabled  = true;
-
-    waiting = true;
-    setTimeout(() => { waiting = false; dealHandRFI(); }, 1400);
   }
 
-  raiseBtn.addEventListener("click", () => answerRFI("raise"));
-  foldBtn.addEventListener("click",  () => answerRFI("fold"));
+  function dealCurrentMode() {
+    var mode = modeSelect.value;
+    if (mode === "live") dealLiveTable();
+    else if (mode === "quiz") dealRFI();
+  }
+
+  // Helpers for explore table views
+  function showTableRFI(heroPos) {
+    resetAllSeats();
+    var idx = TABLE_POSITIONS.indexOf(heroPos);
+    for (var i = 0; i < idx; i++) setSeatState(TABLE_POSITIONS[i], "folded", "fold");
+    setSeatState(heroPos, "hero", "YOU");
+  }
+
+  function showTableScenario(heroPos, openerPos) {
+    resetAllSeats();
+    var opIdx = TABLE_POSITIONS.indexOf(openerPos);
+    var heroIdx = TABLE_POSITIONS.indexOf(heroPos);
+    TABLE_POSITIONS.forEach(function(pos, i) {
+      if (pos === openerPos) setSeatState(pos, "opener", "RAISE");
+      else if (pos === heroPos) setSeatState(pos, "hero", "YOU");
+      else {
+        var between = opIdx < heroIdx ? (i > opIdx && i < heroIdx) : (i > opIdx || i < heroIdx);
+        if (between) setSeatState(pos, "folded", "fold");
+      }
+    });
+  }
 
 
   // ==================================================
-  //  SCENARIO: Facing raise deal
+  //  Event listeners
   // ==================================================
-  function dealScenario() {
-    if (waiting) return;
+  modeSelect.addEventListener("change", updateMode);
 
-    const heroPos   = positionSelect.value;
-    const openerPos = openerSelect.value;
-    if (!openerPos) return;
-
-    // Random hand
-    const r = Math.floor(Math.random() * 13);
-    const c = Math.floor(Math.random() * 13);
-    const label = getHandLabel(r, c);
-    const correctAction = getCorrectActionVsRaise(heroPos, openerPos, label);
-
-    currentScenario = { heroPos, openerPos, handLabel: label, correctAction };
-
-    // Update table
-    showTableScenario(heroPos, openerPos);
-
-    // Description
-    scenarioDesc.textContent = openerPos + " opens. You are in " + heroPos + ". What do you do?";
-
-    renderRandomCards(cardS1, cardS2, r, c);
-    hideScenarioFeedback();
-    threeBetBtn.disabled = false;
-    callBtn.disabled     = false;
-    foldSBtn.disabled    = false;
-  }
-
-  function answerScenario(action) {
-    if (!currentScenario || waiting) return;
-
-    const correct = (action === currentScenario.correctAction);
-    const ACTION_LABELS = { "3bet": "3-Bet", "call": "Call", "fold": "Fold" };
-    const correctLabel = ACTION_LABELS[currentScenario.correctAction];
-
-    if (correct) {
-      score.correct++;
-      showScenarioFeedback(true, "Correct!");
-    } else {
-      score.wrong++;
-      showScenarioFeedback(false,
-        "Wrong \u2014 " + currentScenario.handLabel +
-        " vs " + currentScenario.openerPos + " open: " + correctLabel
-      );
-    }
-
-    updateScore();
-    threeBetBtn.disabled = true;
-    callBtn.disabled     = true;
-    foldSBtn.disabled    = true;
-
-    waiting = true;
-    setTimeout(() => { waiting = false; dealScenario(); }, 1600);
-  }
-
-  threeBetBtn.addEventListener("click", () => answerScenario("3bet"));
-  callBtn.addEventListener("click",     () => answerScenario("call"));
-  foldSBtn.addEventListener("click",    () => answerScenario("fold"));
-
-
-  // ---- Deal button dispatches to current mode ----
-  dealBtn.addEventListener("click", () => {
-    if (modeSelect.value === "quiz") dealHandRFI();
-    else if (modeSelect.value === "scenario") dealScenario();
-  });
-
-
-  // ---- Keyboard shortcuts ----
-  document.addEventListener("keydown", e => {
-    const mode = modeSelect.value;
-    const key = e.key.toLowerCase();
-
-    if (mode === "quiz") {
-      if (key === "r") answerRFI("raise");
-      else if (key === "f") answerRFI("fold");
-      else if (key === "d") dealHandRFI();
-    } else if (mode === "scenario") {
-      if (key === "3" || key === "r") answerScenario("3bet");
-      else if (key === "c") answerScenario("call");
-      else if (key === "f") answerScenario("fold");
-      else if (key === "d") dealScenario();
+  positionSelect.addEventListener("change", function() {
+    var mode = modeSelect.value;
+    if (mode === "explore") {
+      buildGrid();
+      showTableRFI(resolvePosition());
+    } else if (mode === "explore-vs") {
+      populateOpeners();
+      if (openerSelect.value) {
+        showTableScenario(resolvePosition(), openerSelect.value);
+        buildVsGrid();
+      }
     }
   });
 
+  openerSelect.addEventListener("change", function() {
+    if (modeSelect.value === "explore-vs" && openerSelect.value) {
+      showTableScenario(resolvePosition(), openerSelect.value);
+      buildVsGrid();
+    }
+  });
 
-  // ---- Feedback helpers ----
-  function showFeedback(isCorrect, msg) {
-    feedback.classList.remove("hidden", "correct", "wrong");
-    feedback.classList.add(isCorrect ? "correct" : "wrong");
-    feedbackIcon.textContent = isCorrect ? "\u2714" : "\u2718";
-    feedbackText.textContent = " " + msg;
-  }
-  function hideFeedback() {
-    feedback.classList.add("hidden");
-    feedback.classList.remove("correct", "wrong");
-  }
+  dealBtn.addEventListener("click", dealCurrentMode);
 
-  function showScenarioFeedback(isCorrect, msg) {
-    scenarioFeedback.classList.remove("hidden", "correct", "wrong");
-    scenarioFeedback.classList.add(isCorrect ? "correct" : "wrong");
-    scenarioFeedbackIcon.textContent = isCorrect ? "\u2714" : "\u2718";
-    scenarioFeedbackText.textContent = " " + msg;
-  }
-  function hideScenarioFeedback() {
-    scenarioFeedback.classList.add("hidden");
-    scenarioFeedback.classList.remove("correct", "wrong");
-  }
-
-
-  // ---- Score ----
-  function updateScore() {
-    correctCount.textContent = score.correct;
-    wrongCount.textContent   = score.wrong;
-    const total = score.correct + score.wrong;
-    accuracy.textContent = total > 0
-      ? Math.round((score.correct / total) * 100) + "%"
-      : "\u2014";
-  }
-
-  resetBtn.addEventListener("click", () => {
+  resetBtn.addEventListener("click", function() {
     score = { correct: 0, wrong: 0 };
     updateScore();
   });
 
 
-  // ---- Utility ----
+  // ==================================================
+  //  Feedback & Score
+  // ==================================================
+  function showFeedback(isCorrect, msg) {
+    feedbackEl.classList.remove("hidden", "correct", "wrong");
+    feedbackEl.classList.add(isCorrect ? "correct" : "wrong");
+    feedbackIcon.textContent = isCorrect ? "\u2714" : "\u2718";
+    feedbackText.textContent = " " + msg;
+  }
+
+  function hideFeedback() {
+    feedbackEl.classList.add("hidden");
+    feedbackEl.classList.remove("correct", "wrong");
+  }
+
+  function updateScore() {
+    correctCount.textContent = score.correct;
+    wrongCount.textContent   = score.wrong;
+    var total = score.correct + score.wrong;
+    accuracyEl.textContent = total > 0
+      ? Math.round((score.correct / total) * 100) + "%"
+      : "\u2014";
+  }
+
+
+  // ==================================================
+  //  Utility
+  // ==================================================
   function shuffleArray(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
     }
     return arr;
   }
 
 
-  // ---- Init ----
+  // ==================================================
+  //  Init
+  // ==================================================
   buildTable();
   updateMode();
-  dealHandRFI();
+  dealCurrentMode();
+
 })();

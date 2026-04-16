@@ -2,17 +2,14 @@
 //  GTO Preflop Ranges for 6-Max Cash Games
 // =============================================
 //
-// Hand notation: "AKs" = suited, "AKo" = offsuit, "AA" = pair
-//
-// RANGES       — RFI (raise first in) when folded to you
-// FACING_RAISE — 3-bet / call / fold when someone has already opened
+// RANGES        — RFI (raise first in) when folded to you
+// FACING_RAISE  — 3-bet / call / fold when someone has opened
+// FACING_3BET   — 4-bet / call / fold when you opened and got 3-bet
+// COLD_VS_3BET  — 4-bet / call / fold when cold-facing a 3-bet
 //
 // Positions: UTG, HJ, CO, BTN, SB, BB
 
-// ---- Table layout (clockwise from UTG) ----
 var TABLE_POSITIONS = ["UTG","HJ","CO","BTN","SB","BB"];
-
-// ---- 13×13 grid helpers ----
 var RANKS = ["A","K","Q","J","T","9","8","7","6","5","4","3","2"];
 
 function getHandLabel(row, col) {
@@ -20,6 +17,7 @@ function getHandLabel(row, col) {
   if (col > row)   return RANKS[row] + RANKS[col] + "s";
   return RANKS[col] + RANKS[row] + "o";
 }
+
 
 // =============================================
 //  RFI — Raise First In (folded to hero)
@@ -130,8 +128,6 @@ var RANGES = {
     ]
   },
   BB: {
-    // BB doesn't traditionally RFI — they close the action.
-    // This range represents what BB raises with vs an SB limp (rare).
     raise: [
       "AA","KK","QQ","JJ","TT","99","88","77","66","55","44","33","22",
       "AKs","AQs","AJs","ATs","A9s","A8s","A7s","A6s","A5s","A4s","A3s","A2s",
@@ -161,22 +157,16 @@ var RANGES = {
 
 
 // =============================================
-//  FACING RAISE — 3-bet / Call ranges
-//  Key format:  FACING_RAISE[heroPos][openerPos]
-//  Each entry has { threeBet: [...], call: [...] }
-//  Anything not listed is a fold.
+//  FACING RAISE — 3-bet / Call when someone opened
+//  FACING_RAISE[heroPos][openerPos]
 // =============================================
 var FACING_RAISE = {
-
-  // ---- HJ facing opens ----
   HJ: {
     UTG: {
       threeBet: ["AA","KK","QQ","AKs","AKo"],
       call:     ["JJ","TT","99","AQs","AJs","ATs","KQs","QJs","JTs","T9s","98s"]
     }
   },
-
-  // ---- CO facing opens ----
   CO: {
     UTG: {
       threeBet: ["AA","KK","QQ","AKs","AKo"],
@@ -187,8 +177,6 @@ var FACING_RAISE = {
       call:     ["TT","99","88","77","AJs","ATs","A5s","A4s","KQs","KJs","KTs","QJs","QTs","JTs","J9s","T9s","98s","87s","76s"]
     }
   },
-
-  // ---- BTN facing opens ----
   BTN: {
     UTG: {
       threeBet: ["AA","KK","QQ","AKs","AKo","A5s"],
@@ -203,8 +191,6 @@ var FACING_RAISE = {
       call:     ["99","88","77","66","55","ATs","A9s","A8s","A7s","A6s","A3s","A2s","KQs","KJs","KTs","KQo","QJs","QTs","Q9s","JTs","J9s","J8s","T9s","T8s","98s","97s","87s","86s","76s","75s","65s","64s","54s","53s"]
     }
   },
-
-  // ---- SB facing opens ----
   SB: {
     UTG: {
       threeBet: ["AA","KK","QQ","AKs","AKo","AQs"],
@@ -223,8 +209,6 @@ var FACING_RAISE = {
       call:     ["88","77","A8s","A7s","A6s","A2s","KTs","K8s","QJs","QTs","Q9s","JTs","J9s","T9s","98s","87s"]
     }
   },
-
-  // ---- BB facing opens (defending the big blind) ----
   BB: {
     UTG: {
       threeBet: ["AA","KK","QQ","AKs","AKo","A5s"],
@@ -251,7 +235,48 @@ var FACING_RAISE = {
 
 
 // =============================================
-//  API functions used by app.js
+//  FACING 3-BET — when you opened and get 3-bet
+//  FACING_3BET[openerPos] = { fourBet, call }
+// =============================================
+var FACING_3BET = {
+  UTG: {
+    fourBet: ["AA","KK"],
+    call:    ["QQ","JJ","AKs","AKo"]
+  },
+  HJ: {
+    fourBet: ["AA","KK","AKs"],
+    call:    ["QQ","JJ","TT","AKo","AQs"]
+  },
+  CO: {
+    fourBet: ["AA","KK","AKs","A5s"],
+    call:    ["QQ","JJ","TT","AKo","AQs","AJs","KQs"]
+  },
+  BTN: {
+    fourBet: ["AA","KK","QQ","AKs","A5s","A4s"],
+    call:    ["JJ","TT","99","AKo","AQs","AQo","AJs","ATs","KQs","KJs"]
+  },
+  SB: {
+    fourBet: ["AA","KK","QQ","AKs","AKo","A5s"],
+    call:    ["JJ","TT","AQs","AJs","KQs"]
+  }
+};
+
+
+// =============================================
+//  COLD vs 3-BET — when you haven't acted and face a 3-bet
+//  (Very tight — cold 4-bet/call is rare)
+//  COLD_VS_3BET[heroPos] = { fourBet, call }
+// =============================================
+var COLD_VS_3BET = {
+  CO:  { fourBet: ["AA","KK"], call: [] },
+  BTN: { fourBet: ["AA","KK"], call: ["QQ","AKs"] },
+  SB:  { fourBet: ["AA","KK"], call: [] },
+  BB:  { fourBet: ["AA","KK","QQ"], call: ["JJ","TT","AKs","AKo"] }
+};
+
+
+// =============================================
+//  API functions
 // =============================================
 
 function getRangeSet(position) {
@@ -262,34 +287,107 @@ function getPositions() {
   return Object.keys(RANGES);
 }
 
-// Get facing-raise data for a hero vs a specific opener
-// Returns { threeBet: Set, call: Set } or null if no data
 function getFacingRaiseData(heroPos, openerPos) {
-  const data = FACING_RAISE[heroPos]?.[openerPos];
+  var data = FACING_RAISE[heroPos]?.[openerPos];
   if (!data) return null;
-  return {
-    threeBet: new Set(data.threeBet),
-    call:     new Set(data.call)
-  };
+  return { threeBet: new Set(data.threeBet), call: new Set(data.call) };
 }
 
-// Get all valid scenarios: { heroPos, openerPos } pairs
+function getFacing3BetData(openerPos) {
+  var data = FACING_3BET[openerPos];
+  if (!data) return null;
+  return { fourBet: new Set(data.fourBet), call: new Set(data.call) };
+}
+
+function getColdVs3BetData(heroPos) {
+  var data = COLD_VS_3BET[heroPos];
+  if (!data) return null;
+  return { fourBet: new Set(data.fourBet), call: new Set(data.call) };
+}
+
 function getAllScenarios() {
-  const scenarios = [];
-  for (const hero of Object.keys(FACING_RAISE)) {
-    for (const opener of Object.keys(FACING_RAISE[hero])) {
+  var scenarios = [];
+  for (var hero of Object.keys(FACING_RAISE)) {
+    for (var opener of Object.keys(FACING_RAISE[hero])) {
       scenarios.push({ heroPos: hero, openerPos: opener });
     }
   }
   return scenarios;
 }
 
-// Determine correct action for a hand facing a raise
-// Returns "3bet", "call", or "fold"
+// Determine correct action vs a raise
 function getCorrectActionVsRaise(heroPos, openerPos, handLabel) {
-  const data = getFacingRaiseData(heroPos, openerPos);
+  var data = getFacingRaiseData(heroPos, openerPos);
   if (!data) return "fold";
   if (data.threeBet.has(handLabel)) return "3bet";
   if (data.call.has(handLabel))     return "call";
   return "fold";
+}
+
+// Determine correct action when you opened and face a 3-bet
+function getCorrectActionVs3Bet(openerPos, handLabel) {
+  var data = getFacing3BetData(openerPos);
+  if (!data) return "fold";
+  if (data.fourBet.has(handLabel)) return "4bet";
+  if (data.call.has(handLabel))    return "call";
+  return "fold";
+}
+
+// Determine correct action when cold-facing a 3-bet
+function getCorrectActionColdVs3Bet(heroPos, handLabel) {
+  var data = getColdVs3BetData(heroPos);
+  if (!data) return "fold";
+  if (data.fourBet.has(handLabel)) return "4bet";
+  if (data.call.has(handLabel))    return "call";
+  return "fold";
+}
+
+
+// =============================================
+//  Simulation: decide what an AI player does
+// =============================================
+// potState: "unopened" | "raised" | "3bet"
+// Returns: "fold", "raise", "call", "3bet", "4bet"
+function getAIAction(playerPos, handLabel, potState, raiserPos) {
+  if (potState === "unopened") {
+    // RFI decision
+    var rfi = getRangeSet(playerPos);
+    return rfi.has(handLabel) ? "raise" : "fold";
+  }
+
+  if (potState === "raised") {
+    // Facing an open
+    var frData = getFacingRaiseData(playerPos, raiserPos);
+    if (!frData) {
+      // No specific data — use a very tight default
+      var tightSet = new Set(["AA","KK","QQ","AKs"]);
+      if (tightSet.has(handLabel)) return "3bet";
+      return "fold";
+    }
+    if (frData.threeBet.has(handLabel)) return "3bet";
+    if (frData.call.has(handLabel))     return "call";
+    return "fold";
+  }
+
+  if (potState === "3bet") {
+    // Facing a 3-bet — very tight
+    var coldData = getColdVs3BetData(playerPos);
+    if (!coldData) {
+      // Ultra-tight fallback
+      var ultraTight = new Set(["AA","KK"]);
+      return ultraTight.has(handLabel) ? "call" : "fold";
+    }
+    if (coldData.fourBet.has(handLabel)) return "4bet";
+    if (coldData.call.has(handLabel))    return "call";
+    return "fold";
+  }
+
+  return "fold";
+}
+
+// Generate a random hand label from the 13x13 grid
+function randomHandLabel() {
+  var r = Math.floor(Math.random() * 13);
+  var c = Math.floor(Math.random() * 13);
+  return { row: r, col: c, label: getHandLabel(r, c) };
 }
