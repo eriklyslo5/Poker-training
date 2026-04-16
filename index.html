@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poker Opening Range Trainer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header>
+    <h1>Poker Opening Range Trainer</h1>
+    <p class="subtitle">6-Max GTO Preflop Ranges</p>
+  </header>
+
+  <main>
+    <!-- Controls -->
+    <section id="controls">
+      <div class="control-group">
+        <label for="position-select">Position:</label>
+        <select id="position-select"></select>
+      </div>
+      <div class="control-group">
+        <label for="mode-select">Mode:</label>
+        <select id="mode-select">
+          <option value="quiz">Quiz Me</option>
+          <option value="explore">Explore Range</option>
+        </select>
+      </div>
+      <button id="deal-btn" class="btn btn-primary">Deal Hand</button>
+    </section>
+
+    <!-- Quiz Mode -->
+    <section id="quiz-area" class="hidden">
+      <div id="hand-display">
+        <div class="card" id="card-1"></div>
+        <div class="card" id="card-2"></div>
+      </div>
+      <div id="action-buttons">
+        <button id="raise-btn" class="btn btn-raise">Raise</button>
+        <button id="fold-btn" class="btn btn-fold">Fold</button>
+      </div>
+      <div id="feedback" class="hidden">
+        <span id="feedback-icon"></span>
+        <span id="feedback-text"></span>
+      </div>
+    </section>
+
+    <!-- Explore Mode -->
+    <section id="explore-area" class="hidden">
+      <div id="range-grid"></div>
+      <div id="legend">
+        <span class="legend-item"><span class="swatch raise"></span> Raise</span>
+        <span class="legend-item"><span class="swatch fold"></span> Fold</span>
+      </div>
+    </section>
+
+    <!-- Score -->
+    <section id="scoreboard">
+      <div class="score-item">
+        <span class="score-label">Correct</span>
+        <span id="correct-count" class="score-value correct">0</span>
+      </div>
+      <div class="score-item">
+        <span class="score-label">Wrong</span>
+        <span id="wrong-count" class="score-value wrong">0</span>
+      </div>
+      <div class="score-item">
+        <span class="score-label">Accuracy</span>
+        <span id="accuracy" class="score-value">—</span>
+      </div>
+      <button id="reset-btn" class="btn btn-secondary">Reset Score</button>
+    </section>
+  </main>
+
+  <footer>
+    <p>Practice GTO opening ranges &mdash; 6-max cash game</p>
+  </footer>
+
+  <script src="ranges.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

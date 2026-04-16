@@ -1,0 +1,242 @@
+/* ============================================
+   Poker Opening Range Trainer — Dark Theme
+   ============================================ */
+
+:root {
+  --bg-primary:   #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-card:      #0f3460;
+  --accent:       #e94560;
+  --green:        #00b894;
+  --red:          #e17055;
+  --gold:         #fdcb6e;
+  --text:         #eee;
+  --text-muted:   #aaa;
+  --border:       #2d3a5c;
+  --radius:       8px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Header ---------- */
+header {
+  text-align: center;
+  padding: 1.5rem 1rem 0.5rem;
+}
+header h1 {
+  font-size: 1.6rem;
+  color: var(--gold);
+  letter-spacing: 1px;
+}
+.subtitle {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
+/* ---------- Main ---------- */
+main {
+  flex: 1;
+  max-width: 640px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+/* ---------- Controls ---------- */
+#controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 1.25rem;
+}
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.control-group label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+select {
+  background: var(--bg-secondary);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+select:focus { outline: 2px solid var(--accent); }
+
+/* ---------- Buttons ---------- */
+.btn {
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.55rem 1.2rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s, filter 0.15s;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary  { background: var(--accent); color: #fff; }
+.btn-primary:hover  { filter: brightness(1.15); }
+.btn-raise    { background: var(--green); color: #fff; min-width: 100px; }
+.btn-raise:hover    { filter: brightness(1.15); }
+.btn-fold     { background: var(--red); color: #fff; min-width: 100px; }
+.btn-fold:hover     { filter: brightness(1.15); }
+.btn-secondary { background: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border); }
+.btn-secondary:hover { color: var(--text); border-color: var(--text-muted); }
+
+/* ---------- Quiz Area ---------- */
+#quiz-area { text-align: center; margin-bottom: 1.25rem; }
+
+#hand-display {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.card {
+  width: 90px;
+  height: 130px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  background: #fff;
+  color: #222;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+  user-select: none;
+}
+.card.red  { color: #c0392b; }
+.card.black { color: #222; }
+
+#action-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+/* ---------- Feedback ---------- */
+#feedback {
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  display: inline-block;
+  min-width: 220px;
+}
+#feedback.correct { background: rgba(0,184,148,0.15); color: var(--green); }
+#feedback.wrong   { background: rgba(225,112,85,0.15); color: var(--red); }
+
+/* ---------- Explore Grid ---------- */
+#explore-area { margin-bottom: 1.25rem; }
+
+#range-grid {
+  display: grid;
+  grid-template-columns: repeat(13, 1fr);
+  gap: 2px;
+  max-width: 100%;
+  margin: 0 auto 0.75rem;
+}
+
+.grid-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 3px;
+  cursor: default;
+  transition: transform 0.1s;
+  user-select: none;
+}
+.grid-cell:hover { transform: scale(1.12); z-index: 1; }
+.grid-cell.raise { background: var(--green); color: #fff; }
+.grid-cell.fold  { background: var(--bg-secondary); color: var(--text-muted); border: 1px solid var(--border); }
+
+#legend {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.legend-item { display: flex; align-items: center; gap: 0.35rem; }
+.swatch {
+  width: 14px; height: 14px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.swatch.raise { background: var(--green); }
+.swatch.fold  { background: var(--bg-secondary); border: 1px solid var(--border); }
+
+/* ---------- Scoreboard ---------- */
+#scoreboard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-bottom: 1.25rem;
+}
+.score-item { text-align: center; }
+.score-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-bottom: 0.15rem;
+}
+.score-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.score-value.correct { color: var(--green); }
+.score-value.wrong   { color: var(--red); }
+
+/* ---------- Footer ---------- */
+footer {
+  text-align: center;
+  padding: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ---------- Utility ---------- */
+.hidden { display: none !important; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 480px) {
+  header h1 { font-size: 1.25rem; }
+  .card { width: 72px; height: 104px; font-size: 1.3rem; }
+  .grid-cell { font-size: 0.5rem; }
+  #controls { flex-direction: column; align-items: stretch; }
+  .btn { width: 100%; }
+  #action-buttons { flex-direction: column; align-items: center; }
+}
