@@ -385,9 +385,97 @@ function getAIAction(playerPos, handLabel, potState, raiserPos) {
   return "fold";
 }
 
-// Generate a random hand label from the 13x13 grid
+// Generate a random hand label from the 13x13 grid (unweighted — used by AI)
 function randomHandLabel() {
   var r = Math.floor(Math.random() * 13);
   var c = Math.floor(Math.random() * 13);
   return { row: r, col: c, label: getHandLabel(r, c) };
+}
+
+
+// =============================================
+//  Borderline detection & weighted dealing
+// =============================================
+//
+//  A hand is "borderline" if any of its 8 neighbours in the 13×13
+//  grid map to a DIFFERENT correct action.  These are the hands at
+//  the edge of a range — the hardest to memorise.
+//
+//  Weighting:
+//    borderline hands  →  BORDERLINE_WEIGHT  (default 4×)
+//    clear hands       →  1×
+
+var BORDERLINE_WEIGHT = 4;
+
+// actionFn(row, col) → action string  (e.g. "raise", "fold", "3bet")
+// Returns Set of grid indices (row*13+col) that sit on a boundary.
+function findBorderlineIndices(actionFn) {
+  var border = new Set();
+  for (var r = 0; r < 13; r++) {
+    for (var c = 0; c < 13; c++) {
+      var myAction = actionFn(r, c);
+      var onEdge = false;
+      for (var dr = -1; dr <= 1 && !onEdge; dr++) {
+        for (var dc = -1; dc <= 1 && !onEdge; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          var nr = r + dr, nc = c + dc;
+          if (nr < 0 || nr >= 13 || nc < 0 || nc >= 13) continue;
+          if (actionFn(nr, nc) !== myAction) {
+            onEdge = true;
+          }
+        }
+      }
+      if (onEdge) border.add(r * 13 + c);
+    }
+  }
+  return border;
+}
+
+// Build a weighted lookup table for a given action function.
+// Returns { entries: [{row,col,label}...], totalWeight }
+// where borderline entries appear BORDERLINE_WEIGHT times.
+function buildWeightedTable(actionFn) {
+  var borderline = findBorderlineIndices(actionFn);
+  var entries = [];
+  var totalWeight = 0;
+
+  for (var r = 0; r < 13; r++) {
+    for (var c = 0; c < 13; c++) {
+      var idx = r * 13 + c;
+      var w = borderline.has(idx) ? BORDERLINE_WEIGHT : 1;
+      for (var k = 0; k < w; k++) {
+        entries.push({ row: r, col: c, label: getHandLabel(r, c) });
+      }
+      totalWeight += w;
+    }
+  }
+  return { entries: entries, totalWeight: totalWeight };
+}
+
+// Pick a weighted random hand from a pre-built table
+function weightedRandomHand(table) {
+  var i = Math.floor(Math.random() * table.entries.length);
+  return table.entries[i];
+}
+
+// --- Convenience: build weighted table for RFI ---
+function buildRFIWeightedTable(position) {
+  var rangeSet = getRangeSet(position);
+  return buildWeightedTable(function(r, c) {
+    return rangeSet.has(getHandLabel(r, c)) ? "raise" : "fold";
+  });
+}
+
+// --- Convenience: build weighted table for facing a raise ---
+function buildFacingRaiseWeightedTable(heroPos, openerPos) {
+  return buildWeightedTable(function(r, c) {
+    return getCorrectActionVsRaise(heroPos, openerPos, getHandLabel(r, c));
+  });
+}
+
+// --- Convenience: build weighted table for cold vs 3-bet ---
+function buildColdVs3BetWeightedTable(heroPos) {
+  return buildWeightedTable(function(r, c) {
+    return getCorrectActionColdVs3Bet(heroPos, getHandLabel(r, c));
+  });
 }

@@ -263,6 +263,48 @@ select:focus { outline: 2px solid var(--accent); }
 #feedback.correct { background: rgba(0,184,148,0.15); color: var(--green); }
 #feedback.wrong   { background: rgba(225,112,85,0.15); color: var(--orange); }
 
+/* ---------- Reveal Grid (shown on wrong answer) ---------- */
+#reveal-area {
+  margin-bottom: 1.25rem;
+  text-align: center;
+  animation: revealSlide 0.35s ease;
+}
+@keyframes revealSlide {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#reveal-header {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+#reveal-grid {
+  display: grid;
+  grid-template-columns: repeat(13, 1fr);
+  gap: 2px;
+  max-width: 100%;
+  margin: 0 auto 0.5rem;
+}
+#reveal-legend {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+#next-hand-btn {
+  margin-top: 0.25rem;
+}
+
+/* Highlighted cell (the hand hero was dealt) */
+.grid-cell.highlight {
+  outline: 2px solid var(--gold);
+  outline-offset: -1px;
+  box-shadow: 0 0 8px rgba(253,203,110,0.5);
+  z-index: 2;
+}
+
 /* ---------- Explore Grids ---------- */
 #explore-area, #explore-vs-area { margin-bottom: 1.25rem; }
 

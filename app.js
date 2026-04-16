@@ -25,6 +25,11 @@
   var feedbackEl      = document.getElementById("feedback");
   var feedbackIcon    = document.getElementById("feedback-icon");
   var feedbackText    = document.getElementById("feedback-text");
+  var revealArea      = document.getElementById("reveal-area");
+  var revealHeader    = document.getElementById("reveal-header");
+  var revealGrid      = document.getElementById("reveal-grid");
+  var revealLegend    = document.getElementById("reveal-legend");
+  var nextHandBtn     = document.getElementById("next-hand-btn");
   var exploreArea     = document.getElementById("explore-area");
   var rangeGrid       = document.getElementById("range-grid");
   var exploreVsArea   = document.getElementById("explore-vs-area");
@@ -246,6 +251,7 @@
     if (waiting) return;
     clearSimTimers();
     hideFeedback();
+    hideRevealGrid();
     resetAllSeats();
     handArea.classList.add("hidden");
     actionArea.classList.add("hidden");
@@ -258,57 +264,75 @@
     // Mark hero seat
     setSeatState(heroPos, "hero", "YOU");
 
-    // Deal hands to all players
+    // Deal UNWEIGHTED hands to AI opponents
     var playerHands = {};
     TABLE_POSITIONS.forEach(function(pos) {
-      playerHands[pos] = randomHandLabel();
+      if (pos !== heroPos) playerHands[pos] = randomHandLabel();
     });
 
-    // Simulation state
+    // Pre-simulate AI actions to learn the pot state BEFORE picking hero hand
+    var simPotState = "unopened";
+    var simRaiserPos = null;
+    var simThreeBettorPos = null;
+    var precomputedActions = [];
+
+    for (var i = 0; i < TABLE_POSITIONS.length; i++) {
+      var pos = TABLE_POSITIONS[i];
+      if (pos === heroPos) break;
+      var hand = playerHands[pos].label;
+      var action = getAIAction(pos, hand, simPotState, simRaiserPos);
+
+      precomputedActions.push({ pos: pos, action: action });
+
+      if (action === "raise")  { simRaiserPos = pos; simPotState = "raised"; }
+      else if (action === "3bet") { simThreeBettorPos = pos; simPotState = "3bet"; }
+      else if (action === "4bet") { simPotState = "3bet"; }
+    }
+
+    // Now pick hero's hand using WEIGHTED dealing based on the pot state
+    var heroHand;
+    if (simPotState === "unopened") {
+      heroHand = weightedRandomHand(buildRFIWeightedTable(heroPos));
+    } else if (simPotState === "raised" && simRaiserPos) {
+      heroHand = weightedRandomHand(buildFacingRaiseWeightedTable(heroPos, simRaiserPos));
+    } else if (simPotState === "3bet") {
+      heroHand = weightedRandomHand(buildColdVs3BetWeightedTable(heroPos));
+    } else {
+      heroHand = randomHandLabel();
+    }
+    playerHands[heroPos] = heroHand;
+
+    // Now animate the pre-computed actions
     var potState = "unopened";
     var raiserPos = null;
     var threeBettorPos = null;
-
-    // Build the action sequence for players BEFORE hero
-    var actionsBeforeHero = [];
-    for (var i = 0; i < TABLE_POSITIONS.length; i++) {
-      var pos = TABLE_POSITIONS[i];
-      if (pos === heroPos) break; // stop when we reach hero
-      actionsBeforeHero.push(pos);
-    }
-
-    // Animate each player's action with delays
     var DELAY = 600;
     var step = 0;
 
     function processNextPlayer() {
-      if (step >= actionsBeforeHero.length) {
-        // All players before hero have acted — it's hero's turn
+      if (step >= precomputedActions.length) {
         presentHeroDecision(heroPos, playerHands[heroPos], potState, raiserPos, threeBettorPos);
         return;
       }
 
-      var pos = actionsBeforeHero[step];
-      var hand = playerHands[pos].label;
-      var action = getAIAction(pos, hand, potState, raiserPos);
+      var entry = precomputedActions[step];
+      var action = entry.action;
 
-      // Apply action
       if (action === "fold") {
-        setSeatState(pos, "folded", "fold");
+        setSeatState(entry.pos, "folded", "fold");
       } else if (action === "raise") {
-        setSeatState(pos, "opener", "RAISE");
-        raiserPos = pos;
+        setSeatState(entry.pos, "opener", "RAISE");
+        raiserPos = entry.pos;
         potState = "raised";
       } else if (action === "3bet") {
-        setSeatState(pos, "three-bettor", "3-BET");
-        threeBettorPos = pos;
+        setSeatState(entry.pos, "three-bettor", "3-BET");
+        threeBettorPos = entry.pos;
         potState = "3bet";
       } else if (action === "call") {
-        setSeatState(pos, "caller", "CALL");
+        setSeatState(entry.pos, "caller", "CALL");
       } else if (action === "4bet") {
-        // Treat 4-bet as a very aggressive action — rare in simulation
-        setSeatState(pos, "three-bettor", "4-BET");
-        potState = "3bet"; // keep at 3bet level for simplicity
+        setSeatState(entry.pos, "three-bettor", "4-BET");
+        potState = "3bet";
       }
 
       step++;
@@ -316,7 +340,6 @@
       simTimers.push(timer);
     }
 
-    // Start the animation
     var startTimer = setTimeout(processNextPlayer, DELAY);
     simTimers.push(startTimer);
   }
@@ -365,6 +388,7 @@
     if (waiting) return;
     clearSimTimers();
     hideFeedback();
+    hideRevealGrid();
     resetAllSeats();
 
     var heroPos = resolvePosition();
@@ -376,7 +400,7 @@
     }
     setSeatState(heroPos, "hero", "YOU");
 
-    var hand = randomHandLabel();
+    var hand = weightedRandomHand(buildRFIWeightedTable(heroPos));
     var correctAction = getRangeSet(heroPos).has(hand.label) ? "raise" : "fold";
 
     currentState = {
@@ -402,21 +426,34 @@
   // ==================================================
   //  Handle answer (shared by all quiz modes)
   // ==================================================
+  var ACTION_LABELS = {
+    "raise": "Raise", "fold": "Fold",
+    "3bet": "3-Bet", "call": "Call",
+    "4bet": "4-Bet"
+  };
+
   function handleAnswer(action) {
     if (!currentState || waiting) return;
 
     var correct = (action === currentState.correctAction);
-    var ACTION_LABELS = {
-      "raise": "Raise", "fold": "Fold",
-      "3bet": "3-Bet", "call": "Call",
-      "4bet": "4-Bet"
-    };
     var correctLabel = ACTION_LABELS[currentState.correctAction] || currentState.correctAction;
 
     if (correct) {
       score.correct++;
       showFeedback(true, "Correct!");
+      updateScore();
+      disableActionButtons();
+
+      // Auto-deal after short pause
+      waiting = true;
+      var timer = setTimeout(function() {
+        waiting = false;
+        hideRevealGrid();
+        dealCurrentMode();
+      }, 1200);
+      simTimers.push(timer);
     } else {
+      score.wrong++;
       var detail = currentState.handLabel;
       if (currentState.potState === "unopened") {
         detail += " from " + currentState.heroPos + " \u2192 " + correctLabel;
@@ -426,18 +463,116 @@
         detail += " in " + currentState.heroPos + " vs 3-bet \u2192 " + correctLabel;
       }
       showFeedback(false, "Wrong \u2014 " + detail);
+      updateScore();
+      disableActionButtons();
+
+      // Show the full range grid so the user can study it
+      showRevealGrid(currentState);
+
+      // Do NOT auto-deal — wait for "Next Hand" click
+      waiting = true;
+    }
+  }
+
+
+  // ==================================================
+  //  Reveal grid (shown on wrong answers)
+  // ==================================================
+  function showRevealGrid(state) {
+    revealGrid.innerHTML = "";
+    revealLegend.innerHTML = "";
+
+    // Build header describing the scenario
+    if (state.potState === "unopened") {
+      revealHeader.textContent = state.heroPos + " \u2014 RFI Range (Raise or Fold)";
+    } else if (state.potState === "raised") {
+      revealHeader.textContent = state.heroPos + " vs " + state.raiserPos + " Open (3-Bet / Call / Fold)";
+    } else if (state.potState === "3bet") {
+      revealHeader.textContent = state.heroPos + " Cold vs 3-Bet (4-Bet / Call / Fold)";
     }
 
-    updateScore();
-    disableActionButtons();
+    // Determine the action function for this scenario
+    var actionFn;
+    if (state.potState === "unopened") {
+      var rangeSet = getRangeSet(state.heroPos);
+      actionFn = function(r, c) {
+        return rangeSet.has(getHandLabel(r, c)) ? "raise" : "fold";
+      };
+    } else if (state.potState === "raised" && state.raiserPos) {
+      actionFn = function(r, c) {
+        return getCorrectActionVsRaise(state.heroPos, state.raiserPos, getHandLabel(r, c));
+      };
+    } else if (state.potState === "3bet") {
+      actionFn = function(r, c) {
+        return getCorrectActionColdVs3Bet(state.heroPos, getHandLabel(r, c));
+      };
+    }
 
-    waiting = true;
-    var timer = setTimeout(function() {
-      waiting = false;
-      dealCurrentMode();
-    }, 1600);
-    simTimers.push(timer);
+    // Build the 13x13 grid
+    var ACTION_CSS = {
+      "raise": "raise", "3bet": "threeBet", "4bet": "threeBet",
+      "call": "call-cell", "fold": "fold"
+    };
+
+    for (var r = 0; r < 13; r++) {
+      for (var c = 0; c < 13; c++) {
+        var label = getHandLabel(r, c);
+        var act = actionFn ? actionFn(r, c) : "fold";
+        var cell = document.createElement("div");
+        cell.className = "grid-cell " + (ACTION_CSS[act] || "fold");
+        cell.textContent = label;
+        cell.title = label + " \u2014 " + (ACTION_LABELS[act] || act);
+
+        // Highlight the hand that was dealt
+        if (r === state.row && c === state.col) {
+          cell.classList.add("highlight");
+        }
+
+        revealGrid.appendChild(cell);
+      }
+    }
+
+    // Build legend based on pot state
+    var legendItems = [];
+    if (state.potState === "unopened") {
+      legendItems = [
+        { cls: "raise", text: "Raise" },
+        { cls: "fold",  text: "Fold" }
+      ];
+    } else if (state.potState === "raised") {
+      legendItems = [
+        { cls: "threeBet",    text: "3-Bet" },
+        { cls: "call-swatch", text: "Call" },
+        { cls: "fold",        text: "Fold" }
+      ];
+    } else if (state.potState === "3bet") {
+      legendItems = [
+        { cls: "threeBet",    text: "4-Bet" },
+        { cls: "call-swatch", text: "Call" },
+        { cls: "fold",        text: "Fold" }
+      ];
+    }
+
+    legendItems.forEach(function(item) {
+      var span = document.createElement("span");
+      span.className = "legend-item";
+      span.innerHTML = '<span class="swatch ' + item.cls + '"></span> ' + item.text;
+      revealLegend.appendChild(span);
+    });
+
+    revealArea.classList.remove("hidden");
   }
+
+  function hideRevealGrid() {
+    revealArea.classList.add("hidden");
+  }
+
+  // "Next Hand" button — dismiss reveal and deal
+  nextHandBtn.addEventListener("click", function() {
+    waiting = false;
+    hideRevealGrid();
+    dealCurrentMode();
+  });
 
 
   // ==================================================
@@ -461,8 +596,15 @@
       handleAnswer("call");
     } else if (key === "f") {
       handleAnswer("fold");
-    } else if (key === "d") {
-      dealCurrentMode();
+    } else if (key === "d" || key === "n" || key === " ") {
+      // D/N/Space = next hand (also dismisses reveal grid)
+      if (waiting && !revealArea.classList.contains("hidden")) {
+        waiting = false;
+        hideRevealGrid();
+        dealCurrentMode();
+      } else {
+        dealCurrentMode();
+      }
     }
   });
 
@@ -529,6 +671,7 @@
     exploreArea.classList.add("hidden");
     exploreVsArea.classList.add("hidden");
     hideFeedback();
+    hideRevealGrid();
     resetAllSeats();
 
     // Show/hide controls
