@@ -17,20 +17,36 @@
     <!-- Controls -->
     <section id="controls">
       <div class="control-group">
-        <label for="position-select">Position:</label>
-        <select id="position-select"></select>
-      </div>
-      <div class="control-group">
         <label for="mode-select">Mode:</label>
         <select id="mode-select">
-          <option value="quiz">Quiz Me</option>
-          <option value="explore">Explore Range</option>
+          <option value="quiz">Quiz — RFI</option>
+          <option value="scenario">Quiz — Facing Raise</option>
+          <option value="explore">Explore RFI</option>
+          <option value="explore-vs">Explore vs Raise</option>
         </select>
+      </div>
+      <div class="control-group" id="position-group">
+        <label for="position-select">Your Position:</label>
+        <select id="position-select"></select>
+      </div>
+      <div class="control-group hidden" id="opener-group">
+        <label for="opener-select">Opener:</label>
+        <select id="opener-select"></select>
       </div>
       <button id="deal-btn" class="btn btn-primary">Deal Hand</button>
     </section>
 
-    <!-- Quiz Mode -->
+    <!-- Poker Table Visualization -->
+    <section id="table-area">
+      <div id="poker-table">
+        <div class="felt">
+          <div class="felt-label">6-Max</div>
+        </div>
+        <!-- Seats rendered by JS -->
+      </div>
+    </section>
+
+    <!-- Quiz Mode (RFI) -->
     <section id="quiz-area" class="hidden">
       <div id="hand-display">
         <div class="card" id="card-1"></div>
@@ -46,7 +62,25 @@
       </div>
     </section>
 
-    <!-- Explore Mode -->
+    <!-- Scenario Mode (Facing Raise) -->
+    <section id="scenario-area" class="hidden">
+      <div id="scenario-description"></div>
+      <div id="hand-display-scenario">
+        <div class="card" id="card-s1"></div>
+        <div class="card" id="card-s2"></div>
+      </div>
+      <div id="scenario-buttons">
+        <button id="threeBet-btn" class="btn btn-3bet">3-Bet</button>
+        <button id="call-btn" class="btn btn-call">Call</button>
+        <button id="fold-s-btn" class="btn btn-fold">Fold</button>
+      </div>
+      <div id="scenario-feedback" class="hidden">
+        <span id="scenario-feedback-icon"></span>
+        <span id="scenario-feedback-text"></span>
+      </div>
+    </section>
+
+    <!-- Explore RFI Grid -->
     <section id="explore-area" class="hidden">
       <div id="range-grid"></div>
       <div id="legend">
@@ -55,7 +89,17 @@
       </div>
     </section>
 
-    <!-- Score -->
+    <!-- Explore vs Raise Grid -->
+    <section id="explore-vs-area" class="hidden">
+      <div id="range-grid-vs"></div>
+      <div id="legend-vs">
+        <span class="legend-item"><span class="swatch threeBet"></span> 3-Bet</span>
+        <span class="legend-item"><span class="swatch call-swatch"></span> Call</span>
+        <span class="legend-item"><span class="swatch fold"></span> Fold</span>
+      </div>
+    </section>
+
+    <!-- Scoreboard -->
     <section id="scoreboard">
       <div class="score-item">
         <span class="score-label">Correct</span>
@@ -67,14 +111,14 @@
       </div>
       <div class="score-item">
         <span class="score-label">Accuracy</span>
-        <span id="accuracy" class="score-value">—</span>
+        <span id="accuracy" class="score-value">&mdash;</span>
       </div>
       <button id="reset-btn" class="btn btn-secondary">Reset Score</button>
     </section>
   </main>
 
   <footer>
-    <p>Practice GTO opening ranges &mdash; 6-max cash game</p>
+    <p>Practice GTO preflop ranges &mdash; 6-max cash game &mdash; Keys: <kbd>R</kbd>aise / <kbd>3</kbd>-bet, <kbd>C</kbd>all, <kbd>F</kbd>old, <kbd>D</kbd>eal</p>
   </footer>
 
   <script src="ranges.js"></script>
