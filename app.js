@@ -29,6 +29,7 @@
   var revealHeader    = document.getElementById("reveal-header");
   var revealGrid      = document.getElementById("reveal-grid");
   var revealLegend    = document.getElementById("reveal-legend");
+  var nextHandArea    = document.getElementById("next-hand-area");
   var nextHandBtn     = document.getElementById("next-hand-btn");
   var exploreArea     = document.getElementById("explore-area");
   var rangeGrid       = document.getElementById("range-grid");
@@ -46,6 +47,11 @@
 
   // Current hand state (used by all quiz modes)
   var currentState = null;
+
+  // Per-seat context: what pot state each position faced when it was their turn
+  // Populated during simulation so clicking a seat can show that position's range
+  // seatContexts[pos] = { potState, raiserPos, threeBettorPos }
+  var seatContexts = {};
   // {
   //   heroPos, handLabel, row, col,
   //   potState: "unopened"|"raised"|"3bet",
@@ -108,6 +114,7 @@
       seat.className = "seat";
       seat.dataset.pos = pos;
       seat.innerHTML = '<span class="seat-label">' + pos + '</span><span class="seat-action"></span>';
+      seat.addEventListener("click", function() { onSeatClick(pos); });
       pokerTable.appendChild(seat);
     });
   }
@@ -252,6 +259,7 @@
     clearSimTimers();
     hideFeedback();
     hideRevealGrid();
+    nextHandArea.classList.add("hidden");
     resetAllSeats();
     handArea.classList.add("hidden");
     actionArea.classList.add("hidden");
@@ -271,6 +279,8 @@
     });
 
     // Pre-simulate AI actions to learn the pot state BEFORE picking hero hand
+    // Also record each seat's context for the seat-click feature
+    seatContexts = {};
     var simPotState = "unopened";
     var simRaiserPos = null;
     var simThreeBettorPos = null;
@@ -279,6 +289,14 @@
     for (var i = 0; i < TABLE_POSITIONS.length; i++) {
       var pos = TABLE_POSITIONS[i];
       if (pos === heroPos) break;
+
+      // Store the pot state this player faced when it was their turn
+      seatContexts[pos] = {
+        potState: simPotState,
+        raiserPos: simRaiserPos,
+        threeBettorPos: simThreeBettorPos
+      };
+
       var hand = playerHands[pos].label;
       var action = getAIAction(pos, hand, simPotState, simRaiserPos);
 
@@ -287,6 +305,23 @@
       if (action === "raise")  { simRaiserPos = pos; simPotState = "raised"; }
       else if (action === "3bet") { simThreeBettorPos = pos; simPotState = "3bet"; }
       else if (action === "4bet") { simPotState = "3bet"; }
+    }
+
+    // Store hero's context too
+    seatContexts[heroPos] = {
+      potState: simPotState,
+      raiserPos: simRaiserPos,
+      threeBettorPos: simThreeBettorPos
+    };
+
+    // Store contexts for positions AFTER hero (they would face whatever hero created)
+    // We don't know hero's action yet, so store the pot state as-is (pre-hero)
+    for (var j = heroIdx + 1; j < TABLE_POSITIONS.length; j++) {
+      seatContexts[TABLE_POSITIONS[j]] = {
+        potState: simPotState,
+        raiserPos: simRaiserPos,
+        threeBettorPos: simThreeBettorPos
+      };
     }
 
     // Now pick hero's hand using WEIGHTED dealing based on the pot state
@@ -389,10 +424,17 @@
     clearSimTimers();
     hideFeedback();
     hideRevealGrid();
+    nextHandArea.classList.add("hidden");
     resetAllSeats();
 
     var heroPos = resolvePosition();
     var heroIdx = TABLE_POSITIONS.indexOf(heroPos);
+
+    // In RFI mode, all positions face an unopened pot
+    seatContexts = {};
+    TABLE_POSITIONS.forEach(function(pos) {
+      seatContexts[pos] = { potState: "unopened", raiserPos: null, threeBettorPos: null };
+    });
 
     // Show table: everyone before hero folds, hero highlighted
     for (var i = 0; i < heroIdx; i++) {
@@ -438,20 +480,11 @@
     var correct = (action === currentState.correctAction);
     var correctLabel = ACTION_LABELS[currentState.correctAction] || currentState.correctAction;
 
+    disableActionButtons();
+
     if (correct) {
       score.correct++;
-      showFeedback(true, "Correct!");
-      updateScore();
-      disableActionButtons();
-
-      // Auto-deal after short pause
-      waiting = true;
-      var timer = setTimeout(function() {
-        waiting = false;
-        hideRevealGrid();
-        dealCurrentMode();
-      }, 1200);
-      simTimers.push(timer);
+      showFeedback(true, "Correct! Click any seat to compare ranges, or press Next Hand.");
     } else {
       score.wrong++;
       var detail = currentState.handLabel;
@@ -463,52 +496,74 @@
         detail += " in " + currentState.heroPos + " vs 3-bet \u2192 " + correctLabel;
       }
       showFeedback(false, "Wrong \u2014 " + detail);
-      updateScore();
-      disableActionButtons();
 
-      // Show the full range grid so the user can study it
+      // Auto-show hero's range on wrong answers
       showRevealGrid(currentState);
-
-      // Do NOT auto-deal — wait for "Next Hand" click
-      waiting = true;
     }
+
+    updateScore();
+
+    // Always pause — let user click seats to explore ranges, then press Next Hand
+    nextHandArea.classList.remove("hidden");
+    waiting = true;
   }
 
 
   // ==================================================
   //  Reveal grid (shown on wrong answers)
+  //  Delegates to the shared showRevealGridForPosition
   // ==================================================
   function showRevealGrid(state) {
+    showRevealGridForPosition(
+      state.heroPos,
+      state.row,
+      state.col,
+      { potState: state.potState, raiserPos: state.raiserPos, threeBettorPos: state.threeBettorPos }
+    );
+    revealArea.dataset.viewPos = state.heroPos;
+  }
+
+  function hideRevealGrid() {
+    revealArea.classList.add("hidden");
+  }
+
+  // Show the reveal grid for an arbitrary position (reuses the same reveal UI)
+  // viewPos: position to show the range for
+  // handRow/handCol: the hero's dealt hand (to highlight)
+  // context: { potState, raiserPos, threeBettorPos }
+  function showRevealGridForPosition(viewPos, handRow, handCol, context) {
     revealGrid.innerHTML = "";
     revealLegend.innerHTML = "";
 
-    // Build header describing the scenario
-    if (state.potState === "unopened") {
-      revealHeader.textContent = state.heroPos + " \u2014 RFI Range (Raise or Fold)";
-    } else if (state.potState === "raised") {
-      revealHeader.textContent = state.heroPos + " vs " + state.raiserPos + " Open (3-Bet / Call / Fold)";
-    } else if (state.potState === "3bet") {
-      revealHeader.textContent = state.heroPos + " Cold vs 3-Bet (4-Bet / Call / Fold)";
+    var potState = context.potState;
+    var raiserPos = context.raiserPos;
+
+    // Header
+    if (potState === "unopened") {
+      revealHeader.textContent = viewPos + " \u2014 RFI Range (Raise or Fold)";
+    } else if (potState === "raised") {
+      revealHeader.textContent = viewPos + " vs " + raiserPos + " Open (3-Bet / Call / Fold)";
+    } else if (potState === "3bet") {
+      revealHeader.textContent = viewPos + " Cold vs 3-Bet (4-Bet / Call / Fold)";
     }
 
-    // Determine the action function for this scenario
+    // Action function
     var actionFn;
-    if (state.potState === "unopened") {
-      var rangeSet = getRangeSet(state.heroPos);
+    if (potState === "unopened") {
+      var rangeSet = getRangeSet(viewPos);
       actionFn = function(r, c) {
         return rangeSet.has(getHandLabel(r, c)) ? "raise" : "fold";
       };
-    } else if (state.potState === "raised" && state.raiserPos) {
+    } else if (potState === "raised" && raiserPos) {
       actionFn = function(r, c) {
-        return getCorrectActionVsRaise(state.heroPos, state.raiserPos, getHandLabel(r, c));
+        return getCorrectActionVsRaise(viewPos, raiserPos, getHandLabel(r, c));
       };
-    } else if (state.potState === "3bet") {
+    } else if (potState === "3bet") {
       actionFn = function(r, c) {
-        return getCorrectActionColdVs3Bet(state.heroPos, getHandLabel(r, c));
+        return getCorrectActionColdVs3Bet(viewPos, getHandLabel(r, c));
       };
     }
 
-    // Build the 13x13 grid
     var ACTION_CSS = {
       "raise": "raise", "3bet": "threeBet", "4bet": "threeBet",
       "call": "call-cell", "fold": "fold"
@@ -522,30 +577,25 @@
         cell.className = "grid-cell " + (ACTION_CSS[act] || "fold");
         cell.textContent = label;
         cell.title = label + " \u2014 " + (ACTION_LABELS[act] || act);
-
-        // Highlight the hand that was dealt
-        if (r === state.row && c === state.col) {
-          cell.classList.add("highlight");
-        }
-
+        if (r === handRow && c === handCol) cell.classList.add("highlight");
         revealGrid.appendChild(cell);
       }
     }
 
-    // Build legend based on pot state
+    // Legend
     var legendItems = [];
-    if (state.potState === "unopened") {
+    if (potState === "unopened") {
       legendItems = [
         { cls: "raise", text: "Raise" },
         { cls: "fold",  text: "Fold" }
       ];
-    } else if (state.potState === "raised") {
+    } else if (potState === "raised") {
       legendItems = [
         { cls: "threeBet",    text: "3-Bet" },
         { cls: "call-swatch", text: "Call" },
         { cls: "fold",        text: "Fold" }
       ];
-    } else if (state.potState === "3bet") {
+    } else if (potState === "3bet") {
       legendItems = [
         { cls: "threeBet",    text: "4-Bet" },
         { cls: "call-swatch", text: "Call" },
@@ -563,14 +613,37 @@
     revealArea.classList.remove("hidden");
   }
 
-  function hideRevealGrid() {
-    revealArea.classList.add("hidden");
+
+  // ==================================================
+  //  Seat click — show that position's range
+  // ==================================================
+  function onSeatClick(pos) {
+    // Only allow seat clicks when there's a current hand in play
+    // (either during decision or after answering)
+    if (!currentState) return;
+    var mode = modeSelect.value;
+    if (mode !== "live" && mode !== "quiz") return;
+
+    var context = seatContexts[pos];
+    if (!context) return;
+
+    // If the reveal grid is already showing this position, toggle it off
+    if (!revealArea.classList.contains("hidden") && revealArea.dataset.viewPos === pos) {
+      hideRevealGrid();
+      revealArea.dataset.viewPos = "";
+      return;
+    }
+
+    showRevealGridForPosition(pos, currentState.row, currentState.col, context);
+    revealArea.dataset.viewPos = pos;
   }
+
 
   // "Next Hand" button — dismiss reveal and deal
   nextHandBtn.addEventListener("click", function() {
     waiting = false;
     hideRevealGrid();
+    nextHandArea.classList.add("hidden");
     dealCurrentMode();
   });
 
@@ -598,9 +671,10 @@
       handleAnswer("fold");
     } else if (key === "d" || key === "n" || key === " ") {
       // D/N/Space = next hand (also dismisses reveal grid)
-      if (waiting && !revealArea.classList.contains("hidden")) {
+      if (waiting) {
         waiting = false;
         hideRevealGrid();
+        nextHandArea.classList.add("hidden");
         dealCurrentMode();
       } else {
         dealCurrentMode();
@@ -670,6 +744,7 @@
     situationPrompt.classList.add("hidden");
     exploreArea.classList.add("hidden");
     exploreVsArea.classList.add("hidden");
+    nextHandArea.classList.add("hidden");
     hideFeedback();
     hideRevealGrid();
     resetAllSeats();

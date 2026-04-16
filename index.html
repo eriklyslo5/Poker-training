@@ -70,13 +70,17 @@
       <span id="feedback-text"></span>
     </div>
 
-    <!-- Reveal grid (shown on wrong answers) -->
+    <!-- Reveal grid (shown on wrong answers or seat clicks) -->
     <section id="reveal-area" class="hidden">
       <div id="reveal-header"></div>
       <div id="reveal-grid"></div>
       <div id="reveal-legend"></div>
-      <button id="next-hand-btn" class="btn btn-primary">Next Hand</button>
     </section>
+
+    <!-- Next Hand button (always accessible after answering) -->
+    <div id="next-hand-area" class="hidden" style="text-align:center; margin-bottom:1rem;">
+      <button id="next-hand-btn" class="btn btn-primary">Next Hand</button>
+    </div>
 
     <!-- Explore RFI Grid -->
     <section id="explore-area" class="hidden">
