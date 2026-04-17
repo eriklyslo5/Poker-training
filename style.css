@@ -192,6 +192,12 @@ select:focus { outline: 2px solid var(--accent); }
 .seat.waiting {
   opacity: 0.6;
 }
+.seat.available {
+  border-color: var(--accent);
+  background: rgba(214,48,49,0.12);
+  box-shadow: 0 0 10px rgba(214,48,49,0.3);
+  animation: seatPulse 1.5s ease infinite;
+}
 
 /* Seat animation — fade-in when action reaches them */
 .seat.acting {
@@ -351,6 +357,21 @@ select:focus { outline: 2px solid var(--accent); }
 .swatch.threeBet    { background: var(--accent); }
 .swatch.call-swatch { background: var(--blue); }
 .swatch.fold        { background: var(--bg-secondary); border: 1px solid var(--border); }
+
+/* ---------- Explore prompts & headers ---------- */
+.explore-prompt {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+.reveal-hdr {
+  text-align: center;
+  font-weight: 700;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
 
 /* ---------- Scoreboard ---------- */
 #scoreboard {

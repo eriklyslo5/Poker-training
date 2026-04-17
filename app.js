@@ -34,7 +34,10 @@
   var exploreArea     = document.getElementById("explore-area");
   var rangeGrid       = document.getElementById("range-grid");
   var exploreVsArea   = document.getElementById("explore-vs-area");
+  var exploreVsPrompt = document.getElementById("explore-vs-prompt");
+  var exploreVsHeader = document.getElementById("explore-vs-header");
   var rangeGridVs     = document.getElementById("range-grid-vs");
+  var legendVs        = document.getElementById("legend-vs");
   var correctCount    = document.getElementById("correct-count");
   var wrongCount      = document.getElementById("wrong-count");
   var accuracyEl      = document.getElementById("accuracy");
@@ -58,6 +61,12 @@
   //   raiserPos, threeBettorPos,
   //   correctAction: "raise"|"fold"|"3bet"|"call"|"4bet"
   // }
+
+  // Explore-vs state: tracks the current interactive scenario
+  var exploreVsState = {
+    heroPos: null,      // hero's position in explore-vs mode
+    openerPos: null     // currently selected opener (clicked seat)
+  };
 
 
   // ==================================================
@@ -618,10 +627,16 @@
   //  Seat click — show that position's range
   // ==================================================
   function onSeatClick(pos) {
-    // Only allow seat clicks when there's a current hand in play
-    // (either during decision or after answering)
-    if (!currentState) return;
     var mode = modeSelect.value;
+
+    // ---- Explore vs Raise mode: click a seat to set it as opener ----
+    if (mode === "explore-vs") {
+      onExploreVsSeatClick(pos);
+      return;
+    }
+
+    // ---- Live / Quiz modes: show range grid for clicked position ----
+    if (!currentState) return;
     if (mode !== "live" && mode !== "quiz") return;
 
     var context = seatContexts[pos];
@@ -636,6 +651,32 @@
 
     showRevealGridForPosition(pos, currentState.row, currentState.col, context);
     revealArea.dataset.viewPos = pos;
+  }
+
+  // Handle seat clicks in explore-vs mode
+  function onExploreVsSeatClick(pos) {
+    var heroPos = exploreVsState.heroPos;
+    if (!heroPos) return;
+
+    // Can't click your own seat
+    if (pos === heroPos) return;
+
+    // Only allow positions that act before hero (earlier in order)
+    var heroIdx = TABLE_POSITIONS.indexOf(heroPos);
+    var clickIdx = TABLE_POSITIONS.indexOf(pos);
+    if (clickIdx >= heroIdx) return;
+
+    // Check if FACING_RAISE data exists for this matchup
+    if (!FACING_RAISE[heroPos] || !FACING_RAISE[heroPos][pos]) return;
+
+    // Set the clicked position as opener
+    exploreVsState.openerPos = pos;
+
+    // Update table visualization
+    showTableScenario(heroPos, pos);
+
+    // Build the grid
+    buildVsGrid(heroPos, pos);
   }
 
 
@@ -704,11 +745,10 @@
     }
   }
 
-  function buildVsGrid() {
+  function buildVsGrid(heroPos, openerPos) {
     rangeGridVs.innerHTML = "";
-    var heroPos = resolvePosition();
-    var openerPos = openerSelect.value;
-    if (!openerPos) return;
+    legendVs.innerHTML = "";
+    if (!heroPos || !openerPos) return;
 
     var data = getFacingRaiseData(heroPos, openerPos);
 
@@ -727,6 +767,23 @@
         rangeGridVs.appendChild(cell);
       }
     }
+
+    // Dynamic legend
+    var legendItems = [
+      { cls: "threeBet",    text: "3-Bet" },
+      { cls: "call-swatch", text: "Call" },
+      { cls: "fold",        text: "Fold" }
+    ];
+    legendItems.forEach(function(item) {
+      var span = document.createElement("span");
+      span.className = "legend-item";
+      span.innerHTML = '<span class="swatch ' + item.cls + '"></span> ' + item.text;
+      legendVs.appendChild(span);
+    });
+
+    // Header
+    exploreVsHeader.textContent = heroPos + " vs " + openerPos + " Open — 3-Bet / Call / Fold";
+    exploreVsPrompt.textContent = "Click another seat to change the opener.";
   }
 
 
@@ -770,12 +827,7 @@
       case "explore-vs":
         tableArea.classList.remove("hidden");
         dealBtn.classList.add("hidden");
-        openerGroup.classList.remove("hidden");
-        populateOpeners();
-        if (openerSelect.value) {
-          showTableScenario(resolvePosition(), openerSelect.value);
-          buildVsGrid();
-        }
+        initExploreVs();
         break;
     }
   }
@@ -808,6 +860,33 @@
     });
   }
 
+  // Initialize explore-vs mode: show table with hero seat, clickable earlier positions
+  function initExploreVs() {
+    var heroPos = resolvePosition();
+    exploreVsState.heroPos = heroPos;
+    exploreVsState.openerPos = null;
+
+    // Show the explore-vs area with instruction
+    exploreVsArea.classList.remove("hidden");
+    exploreVsPrompt.textContent = "Click a seat to set it as the opener, then see your range.";
+    exploreVsHeader.textContent = "";
+    rangeGridVs.innerHTML = "";
+    legendVs.innerHTML = "";
+
+    // Show table: hero highlighted, valid openers shown as clickable
+    resetAllSeats();
+    setSeatState(heroPos, "hero", "YOU");
+
+    var heroIdx = TABLE_POSITIONS.indexOf(heroPos);
+    TABLE_POSITIONS.forEach(function(pos, i) {
+      if (pos === heroPos) return;
+      if (i < heroIdx && FACING_RAISE[heroPos] && FACING_RAISE[heroPos][pos]) {
+        // Valid opener — mark as available
+        setSeatState(pos, "available", "click");
+      }
+    });
+  }
+
 
   // ==================================================
   //  Event listeners
@@ -820,18 +899,15 @@
       buildGrid();
       showTableRFI(resolvePosition());
     } else if (mode === "explore-vs") {
-      populateOpeners();
-      if (openerSelect.value) {
-        showTableScenario(resolvePosition(), openerSelect.value);
-        buildVsGrid();
-      }
+      initExploreVs();
     }
   });
 
   openerSelect.addEventListener("change", function() {
     if (modeSelect.value === "explore-vs" && openerSelect.value) {
-      showTableScenario(resolvePosition(), openerSelect.value);
-      buildVsGrid();
+      var heroPos = exploreVsState.heroPos || resolvePosition();
+      showTableScenario(heroPos, openerSelect.value);
+      buildVsGrid(heroPos, openerSelect.value);
     }
   });
 
